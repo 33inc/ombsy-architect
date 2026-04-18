@@ -44,7 +44,7 @@ When designing an agent:
 - Set guardrails to prevent harmful outputs
 
 You always respond with complete, deployable agent configurations.
-Return your agent designs as valid JSON."""
+IMPORTANT: When calling create_agent, always include the system_prompt field."""
 
 # ========== Agent tools definition ==========
 TOOLS = [
@@ -55,13 +55,13 @@ TOOLS = [
     },
     {
         "name": "create_agent",
-        "description": "Create a new AI agent in the Ombsy platform",
+        "description": "Create a new AI agent in the Ombsy platform. You MUST include system_prompt.",
         "input_schema": {
             "type": "object",
             "properties": {
                 "name": {"type": "string", "description": "Agent name"},
                 "description": {"type": "string", "description": "What this agent does"},
-                "system_prompt": {"type": "string", "description": "The agent's full system prompt"},
+                "system_prompt": {"type": "string", "description": "REQUIRED: The agent full system prompt defining its behavior"},
                 "tone": {"type": "string", "enum": ["professional", "friendly", "assertive", "empathetic", "casual"]},
                 "channels": {"type": "array", "items": {"type": "string"}, "description": "Channels: web, email, sms, slack, instagram, tiktok"},
                 "tools": {"type": "array", "items": {"type": "string"}, "description": "Tools the agent can use"},
@@ -88,11 +88,19 @@ def execute_list_brands():
     return {"brands": result.data}
 
 def execute_create_agent(args: dict):
+    # Handle case where system_prompt might be missing or use different key
+    system_prompt = args.get("system_prompt") or args.get("prompt") or args.get("instructions") or "You are a helpful AI agent for Ombsy."
+    name = args.get("name") or "Unnamed Agent"
+    tone = args.get("tone", "professional")
+    # Ensure tone is valid
+    valid_tones = ["professional", "friendly", "assertive", "empathetic", "casual"]
+    if tone not in valid_tones:
+        tone = "professional"
     payload = {
-        "name": args["name"],
+        "name": name,
         "description": args.get("description"),
-        "system_prompt": args["system_prompt"],
-        "tone": args.get("tone", "professional"),
+        "system_prompt": system_prompt,
+        "tone": tone,
         "greeting": args.get("greeting"),
         "guardrails": args.get("guardrails", []),
         "tools": args.get("tools", []),
@@ -125,12 +133,12 @@ def run_architect(task: str, brand_id: Optional[str] = None) -> dict:
 
     created_agents = []
     steps = []
-    max_iterations = 10
+    max_iterations = 15
 
     for i in range(max_iterations):
         response = anthropic_client.messages.create(
             model="claude-opus-4-5",
-            max_tokens=4096,
+            max_tokens=8192,
             system=SYSTEM_PROMPT,
             messages=messages,
             tools=TOOLS,
@@ -138,7 +146,6 @@ def run_architect(task: str, brand_id: Optional[str] = None) -> dict:
 
         # Check stop reason
         if response.stop_reason == "end_turn":
-            # Extract text content
             text = "".join([b.text for b in response.content if hasattr(b, "text")])
             return {
                 "status": "complete",
@@ -227,24 +234,20 @@ def spawn_all_agents(
     brands_result = execute_list_brands()
     brands = {b["slug"]: b["id"] for b in brands_result.get("brands", []) if b.get("slug")}
 
-    task = """You are setting up the complete Ombsy AI agent ecosystem. Create the following agents:
+    task = """You are setting up the complete Ombsy AI agent ecosystem. Your job is to call create_agent 8 times to create these agents. For EACH call to create_agent, you MUST include the system_prompt field with a detailed description of the agent behavior.
 
-1. INTAKE AGENT (brand: unlimited-taxes) — Handles new client intake for tax services. Collects name, contact info, tax situation, files leads.
-2. REFERRAL AGENT (brand: unlimited-taxes) — Manages referral program outreach, sends referral codes, tracks referrals.
-3. LEAD NURTURE AGENT (brand: 33leo-agency) — Follows up with cold leads across all brands, re-engages inactive contacts.
-4. SOCIAL CONTENT AGENT (brand: ombrind) — Generates social media content for Instagram, TikTok, and outreach copy.
-5. CRM SYNC AGENT (brand: 33leo-agency) — Keeps CRM data clean, deduplicates leads, updates contact statuses.
-6. APPOINTMENT SCHEDULER AGENT (brand: unlimited-taxes) — Books consultations, sends reminders, handles rescheduling.
-7. OMBRIND STORE AGENT (brand: ombrind) — Handles product inquiries, drop announcements, order status for Ombrind apparel.
-8. OUTREACH AGENT (brand: 33leo-agency) — Cold outreach to potential leads via email and DM, personalized messaging.
+Create these 8 agents one by one using the create_agent tool:
 
-For each agent:
-- Write a detailed system_prompt (50+ words) defining its full behavior
-- Set appropriate tone and channels
-- Include relevant tools
-- Set guardrails
+1. Name: "Tax Intake Agent" - For Unlimited Taxes brand. Handles new client intake for tax services, collects personal info and tax situation.
+2. Name: "Referral Agent" - For Unlimited Taxes brand. Manages referral program, sends referral codes, tracks referrals.
+3. Name: "Lead Nurture Agent" - For 33LEO Agency brand. Follows up with cold leads, re-engages inactive contacts.
+4. Name: "Social Content Agent" - For Ombrind brand. Generates social media content for Instagram and TikTok.
+5. Name: "CRM Sync Agent" - For 33LEO Agency brand. Keeps CRM data clean, deduplicates leads, updates statuses.
+6. Name: "Appointment Scheduler" - For Unlimited Taxes brand. Books consultations, sends reminders, handles rescheduling.
+7. Name: "Ombrind Store Agent" - For Ombrind brand. Handles product inquiries, drop announcements, order status.
+8. Name: "Outreach Agent" - For 33LEO Agency brand. Cold outreach to potential leads via email and DM.
 
-Create ALL 8 agents now."""
+Call list_brands first to get brand IDs, then create all 8 agents with proper brand_id assignments."""
 
     # Add brand IDs to context
     brand_context = "\n\nBrand IDs available:\n" + "\n".join([f"- {slug}: {bid}" for slug, bid in brands.items()])

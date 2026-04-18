@@ -58,7 +58,9 @@ TOOLS = [
                 "channels": {"type": "array", "items": {"type": "string"}, "description": "Channels: web, email, sms, slack, instagram, tiktok"},
                 "tools": {"type": "array", "items": {"type": "string"}, "description": "Tools the agent can use"},
                 "guardrails": {"type": "array", "items": {"type": "string"}, "description": "Behavioral guardrails"},
-                "brand_id": {"type": "string", "description": "Brand UUID to assign agent to"}
+                "brand_id": {"type": "string", "description": "Brand UUID to assign agent to"},
+                "greeting": {"type": "string", "description": "Agent's opening greeting message"},
+                "agent_class": {"type": "string", "description": "Agent classification/category"}
             },
             "required": ["name", "system_prompt", "tone"]
         }
@@ -103,6 +105,7 @@ def execute_create_agent(args: dict):
         "channels": args.get("channels", ["web"]),
         "brand_id": brand_id,
         "brand_scope": brand_scope,
+                "agent_class": args.get("agent_class"),
         "is_active": True,
     }
     result = supabase.table("agents").insert(payload).execute()
